@@ -61,8 +61,8 @@ const LiveThread = class LiveThread extends RedditContent {
   _setupWebSocket () {
     this._rawStream = new WebSocket(this.websocket_url);
     this._populatedStream = new EventEmitter();
-    const handler = data => {
-      const parsed = this._r._populate(JSON.parse(data));
+    const handler = (data, isBinary) => {
+      const parsed = this._r._populate(JSON.parse(isBinary ? data.toString() : data));
       this._populatedStream.emit(parsed.type, parsed.payload);
     };
     if (typeof this._rawStream.on === 'function') {

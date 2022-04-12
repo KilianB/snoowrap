@@ -2,12 +2,12 @@
 // eslint-disable-next-line strict
 'use strict'; // (this is not a module, so 'use strict' is required)
 const expect = require('chai').use(require('dirty-chai')).expect;
-const Promise = require('bluebird');
 const _ = require('lodash');
 const moment = require('moment');
-const request = require('request-promise');
 const util = require('util');
+const axios = require('axios');
 const snoowrap = require('..');
+const FormData = require('form-data');
 
 const isBrowser = typeof self !== 'undefined';
 describe('snoowrap', function () {
@@ -47,21 +47,34 @@ describe('snoowrap', function () {
     r.config({request_delay: 1000});
 
     if (!isBrowser) {
-      const defaultRequest = request.defaults({
-        headers: {'user-agent': oauthInfo.user_agent},
-        json: true,
-        jar: request.jar(),
-        baseUrl: 'https://www.reddit.com/'
+      const axiosClient = axios.create({
+        headers: {
+          baseURL: 'https://www.reddit.com/',
+          headers: {'user-agent': oauthInfo.user_agent}
+        }
       });
 
-      const loginResponse = await defaultRequest.post('api/login').form({
-        user: oauthInfo.username,
-        passwd: oauthInfo.password,
-        api_type: 'json'
+      const postData = new FormData();
+      postData.append('user', oauthInfo.username);
+      postData.append('passwd', oauthInfo.password);
+      postData.append('api_type', 'json');
+
+      const result = await axiosClient({
+        method: 'post',
+        url: 'api/login',
+        data: postData
       });
 
-      expect(loginResponse.json.errors.length).to.equal(0);
-      cookieAgent = defaultRequest.defaults({headers: {'X-Modhash': loginResponse.json.data.modhash}});
+      // expect(loginResponse.json.errors.length).to.equal(0);
+
+      const authenticatedClient = axios.create({
+        headers: {
+          baseURL: 'https://www.reddit.com/',
+          headers: {'user-agent': oauthInfo.user_agent, 'X-Modhash': result.data.modhash}
+        }
+      });
+
+      cookieAgent = authenticatedClient;
     }
   });
 
@@ -194,24 +207,25 @@ describe('snoowrap', function () {
       }).to.throw(TypeError);
     });
     (isBrowser ? it.skip : it)('returns a Promise for a valid requester', async () => {
-      const authResponse = await cookieAgent.post({
-        uri: 'api/v1/authorize',
-        simple: false,
-        resolveWithFullResponse: true,
-        form: {
-          client_id: oauthInfo.client_id,
-          redirect_uri: oauthInfo.redirect_uri,
-          scope: 'identity',
-          state: '_',
-          response_type: 'code',
-          duration: 'temporary',
-          authorize: 'Allow'
-        }
+      const formData = new FormData();
+      formData.append('client_id', oauthInfo.client_id);
+      formData.append('redirect_uri', oauthInfo.redirect_uri);
+      formData.append('scope', 'identity');
+      formData.append('state', '_');
+      formData.append('response_type', 'code');
+      formData.append('duration', 'temporary');
+      formData.append('authorize', 'Allow');
+
+      const response = await cookieAgent({
+        method: 'post',
+        url: 'api/v1/authorize',
+        data: formData
       });
-      expect(authResponse.statusCode).to.equal(302);
+
+      expect(response.status).to.equal(302);
 
       const newRequester = await snoowrap.fromAuthCode({
-        code: require('url').parse(authResponse.headers.location, true).query.code,
+        code: require('url').parse(response.headers.location, true).query.code,
         userAgent: oauthInfo.user_agent,
         clientId: oauthInfo.client_id,
         clientSecret: oauthInfo.client_secret,

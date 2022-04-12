@@ -759,10 +759,10 @@ const snoowrap = class snoowrap {
         throw new errors.WebSocketError('Websocket error. Your post may still have been created.');
       }
       return new Promise((resolve, reject) => {
-        ws.onmessage = event => {
+        ws.onmessage = (eventData, isBinary) => {
           ws.onclose = null;
           ws.close();
-          const data = JSON.parse(event.data);
+          const data = JSON.parse(isBinary ? eventData.toString() : eventData);
           if (data.type === 'failed') {
             reject(new errors.MediaPostFailedError());
           }
