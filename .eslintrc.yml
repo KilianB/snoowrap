@@ -106,7 +106,7 @@ extends:
 plugins:
   - import
   - promise
-  - '@typescript-eslint'
+  - '@typescript-eslint/eslint-plugin'
 
 root: true
 
